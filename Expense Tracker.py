@@ -1,183 +1,163 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+from tkinter import simpledialog
 from Expenses import Expenses
+import os
 import calendar
 import datetime
-import os
-import langflow
-from langflow import workflow
-
 
 budget_file = "budget.txt"
+expense_file_path = "expenses.csv"
 
-def main():
-    print(f"Running Expense Tracker")
-    expense_file_path = "expenses.csv"
+class ExpenseTrackerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Expense Tracker")
+        self.root.geometry("400x450")
+        self.root.config(bg="#f4f4f4")  # Background color
 
-    budget = read_budget()
-    print(f"Your budget for the month is £{budget:.2f}")
+        self.budget = self.read_budget()
+        self.create_widgets()
 
-    if input("Do you want to update your budget? (y/n): ").strip().lower() == "y":
-        budget = set_budget()
-        write_budget(budget)
+    def create_widgets(self):
+        # Configure a style for the widgets
+        style = ttk.Style(self.root)
+        style.configure('TButton', font=('Arial', 12), padding=6, relief="flat", background="#4CAF50", foreground="blue")
+        style.configure('TLabel', font=('Arial', 12), background="#f4f4f4", foreground="blue")
+        style.configure('TEntry', font=('Arial', 12), padding=6)
 
-    while True:
-        # Expense input
-        expense = get_user_expense()
-        if expense is None:
-            print("No expense recorded. Exiting the program.")
-            break
+        # Budget display label
+        self.budget_label = ttk.Label(self.root, text=f"Your budget for the month is: £{self.budget:.2f}")
+        self.budget_label.grid(row=0, column=0, columnspan=2, pady=15, padx=20)
 
-        # Save expense to a file
-        save_expense_to_a_file(expense, expense_file_path)
+        # Update Budget button
+        self.update_budget_button = ttk.Button(self.root, text="Update Budget", command=self.update_budget)
+        self.update_budget_button.grid(row=1, column=0, columnspan=2, pady=10, padx=20)
 
-        # Ask if the user wants to add more expenses
-        if input("Do you want to add another expense? (y/n): ").strip().lower() != "y":
-            break
+        # Expense Name field
+        self.expense_name_label = ttk.Label(self.root, text="Expense Name:")
+        self.expense_name_label.grid(row=2, column=0, pady=10, padx=20, sticky="w")
 
-    # Read expenses from a file and summarize
-    summarise_expenses(expense_file_path, budget)
+        self.expense_name_entry = ttk.Entry(self.root)
+        self.expense_name_entry.grid(row=2, column=1, pady=10, padx=20)
 
+        # Expense Amount field
+        self.expense_amount_label = ttk.Label(self.root, text="Expense Amount:")
+        self.expense_amount_label.grid(row=3, column=0, pady=10, padx=20, sticky="w")
 
-def set_budget():
-    """Set budget for the month."""
-    while True:
+        self.expense_amount_entry = ttk.Entry(self.root)
+        self.expense_amount_entry.grid(row=3, column=1, pady=10, padx=20)
+
+        # Category field (dropdown)
+        self.category_label = ttk.Label(self.root, text="Category:")
+        self.category_label.grid(row=4, column=0, pady=10, padx=20, sticky="w")
+
+        self.category_var = tk.StringVar(self.root)
+        self.category_var.set("Food 🍔")
+
+        self.category_menu = ttk.OptionMenu(self.root, self.category_var, 
+            "Food 🍔", "Home 🏠", "Transport 🚗", "Entertainment 🎮", 
+            "Health 🏥", "Education 📚", "Miscellaneous 🛒")
+        self.category_menu.grid(row=4, column=1, pady=10, padx=20)
+
+        # Add Expense button
+        self.add_expense_button = ttk.Button(self.root, text="Add Expense", command=self.add_expense)
+        self.add_expense_button.grid(row=5, column=0, columnspan=2, pady=10, padx=20)
+
+        # Summary button
+        self.summary_button = ttk.Button(self.root, text="Show Summary", command=self.summarise_expenses)
+        self.summary_button.grid(row=6, column=0, columnspan=2, pady=10, padx=20)
+
+    def update_budget(self):
+        new_budget = simpledialog.askfloat("Set Budget", "Enter your new budget:", minvalue=0)
+        if new_budget is not None:
+            self.budget = new_budget
+            self.write_budget(self.budget)
+            self.budget_label.config(text=f"Your budget for the month is: £{self.budget:.2f}")
+
+    def add_expense(self):
+        expense_name = self.expense_name_entry.get().strip()
+        if not expense_name:
+            messagebox.showerror("Error", "Expense name cannot be empty!")
+            return
+
         try:
-            budget = float(input("Enter your budget for the month: £").strip())
-            return budget
+            expense_amount = float(self.expense_amount_entry.get().strip())
         except ValueError:
-            print("Invalid input. Please enter a numeric value.")
+            messagebox.showerror("Error", "Invalid expense amount!")
+            return
 
+        category = self.category_var.get()
 
-def read_budget():
-    """Read budget from file."""
-    if not os.path.exists(budget_file):
-        print("No budget found. Let's set one up.")
-        budget = set_budget()
-        write_budget(budget)
-        return budget
+        expense = Expenses(name=expense_name, amount=expense_amount, category=category)
+        self.save_expense_to_file(expense)
+        messagebox.showinfo("Success", "Expense added successfully!")
 
-    try:
-        with open(budget_file, "r") as f:
-            return float(f.read().strip())
-    except (ValueError, FileNotFoundError):
-        print("Invalid budget data found. Resetting the budget.")
-        budget = set_budget()
-        write_budget(budget)
-        return budget
-
-
-def write_budget(budget):
-    """Write budget to a file."""
-    with open(budget_file, "w") as f:
-        f.write(f"{budget:.2f}")
-
-
-def get_user_expense():
-    """Get expense details from the user."""
-    expense_name = input("Enter expense Name: ").strip()
-    if not expense_name:
-        print("Expense name cannot be empty. Please try again.")
-        return get_user_expense()
-
-    while True:
-        try:
-            expense_amount = float(input("Enter expense amount: £").strip())
-            break
-        except ValueError:
-            print("Invalid amount. Please enter a numeric value.")
-
-    expense_categories = [
-        "Food 🍔",
-        "Home 🏠",
-        "Transport 🚗",
-        "Entertainment 🎮",
-        "Health 🏥",
-        "Education 📚",
-        "Miscellaneous 🛒"
-    ]
-
-    while True:
-        print("Select a category for your expense:")
-        for i, category_name in enumerate(expense_categories):
-            print(f"{i + 1}. {category_name}")
-        try:
-            selected_index = int(input("Enter the category number: ").strip())
-            if 1 <= selected_index <= len(expense_categories):
-                category = expense_categories[selected_index - 1]
-                break
+    def summarise_expenses(self):
+        expenses = self.load_expenses_from_file()
+        amount_per_category = {}
+        for expense in expenses:
+            if expense.category in amount_per_category:
+                amount_per_category[expense.category] += expense.amount
             else:
-                print("Invalid category number. Please choose a valid number.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+                amount_per_category[expense.category] = expense.amount
 
-    return Expenses(
-        name=expense_name,
-        amount=expense_amount,
-        category=category
-    )
+        summary = "Summary of expenses:\n"
+        for category, amount in amount_per_category.items():
+            summary += f"{category}: £{amount:.2f}\n"
 
+        total_spent = sum(expense.amount for expense in expenses)
+        remaining_budget = self.budget - total_spent
+        summary += f"Total spent: £{total_spent:.2f}\n"
+        summary += f"Remaining budget: £{remaining_budget:.2f}\n"
 
-def save_expense_to_a_file(expense: Expenses, expense_file_path):
-    """Save an expense to a file."""
-    print(f"Saving expense to file: {expense} to {expense_file_path}")
-    with open(expense_file_path, "a", encoding="utf-8") as f:
-        f.write(f"{expense.name}, {expense.amount}, {expense.category}\n")
-
-
-def summarise_expenses(expense_file_path, budget):
-    """Summarize expenses and display budget details."""
-    print(f"Summarizing expenses from {expense_file_path}")
-    expenses = []
-    try:
-        with open(expense_file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            for line in lines:
-                expense_name, expense_amount, expense_category = line.strip().split(",")
-                expenses.append(Expenses(
-                    name=expense_name,
-                    amount=float(expense_amount),
-                    category=expense_category
-                ))
-    except FileNotFoundError:
-        print("No expenses recorded yet.")
-        return
-
-
-    amount_per_category = {}
-    for expense in expenses:
-        if expense.category in amount_per_category:
-            amount_per_category[expense.category] += expense.amount
+        if total_spent > self.budget:
+            summary += "You have exceeded your budget!\n"
         else:
-            amount_per_category[expense.category] = expense.amount
+            summary += "You are within your budget!\n"
 
-    print("Summary of expenses:")
-    for category, amount in amount_per_category.items():
-        print(f"{category}: £{amount:.2f}")
+        now = datetime.datetime.now()
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        remaining_days = days_in_month - now.day
+        daily_budget = remaining_budget / remaining_days if remaining_days > 0 else 0
+        summary += f"Remaining days in the month: {remaining_days}\n"
+        summary += f"Daily budget: £{daily_budget:.2f}"
 
-    total_spent = sum(expense.amount for expense in expenses)
-    remaining_budget = budget - total_spent
-    print(f"Total spent: £{total_spent:.2f}")
-    print(f"Remaining budget: £{remaining_budget:.2f}")
+        messagebox.showinfo("Expense Summary", summary)
 
-    if total_spent > budget:
-        print(red("You have exceeded your budget!"))
-    else:
-        print(green("You are within your budget!"))
+    def load_expenses_from_file(self):
+        expenses = []
+        if os.path.exists(expense_file_path):
+            with open(expense_file_path, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+                for line in lines:
+                    expense_name, expense_amount, expense_category = line.strip().split(",")
+                    expenses.append(Expenses(
+                        name=expense_name,
+                        amount=float(expense_amount),
+                        category=expense_category
+                    ))
+        return expenses
 
-    now = datetime.datetime.now()
-    days_in_month = calendar.monthrange(now.year, now.month)[1]
-    remaining_days = days_in_month - now.day
-    daily_budget = remaining_budget / remaining_days if remaining_days > 0 else 0
-    print(f"Remaining days in the month: {remaining_days}")
-    print(f"Daily budget: £{daily_budget:.2f}")
+    def save_expense_to_file(self, expense):
+        with open(expense_file_path, "a", encoding="utf-8") as file:
+            file.write(f"{expense.name}, {expense.amount}, {expense.category}\n")
 
+    def read_budget(self):
+        if not os.path.exists(budget_file):
+            budget = simpledialog.askfloat("Set Budget", "Enter your initial budget:", minvalue=0)
+            self.write_budget(budget)
+            return budget
 
-def green(text):
-    return f"\033[92m{text}\033[00m"
+        with open(budget_file, "r") as file:
+            return float(file.read().strip())
 
-
-def red(text):
-    return f"\033[91m{text}\033[00m"
+    def write_budget(self, budget):
+        with open(budget_file, "w") as file:
+            file.write(f"{budget:.2f}")
 
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = ExpenseTrackerApp(root)
+    root.mainloop()
